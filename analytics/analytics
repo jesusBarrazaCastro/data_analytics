@@ -1,0 +1,52 @@
+-- VENTAS ===================================================================================================================================
+--orderid,fecha,empleado,producto,idproducto,cantidad,preccioventa,descuento,importe,categoria,proveedor,ciudad_cliente,pais_cliente,cliente
+
+select
+  o."OrderID",
+  o."OrderDate" as fecha,
+  concat(emp."FirstName", ' ', emp."LastName") as empleado,
+  od."ProductID" as id_producto,
+  pr."ProductName" as producto,
+  od."Quantity" as cantidad,
+  od."UnitPrice" as precio_venta,
+  od."Discount" as descuento,
+  ((od."UnitPrice" - (od."Discount" * od."UnitPrice")) * od."Quantity")::numeric(16,2) as importe,
+  cat."CategoryName" as categoria,
+  sup."CompanyName" as proveedor,
+  cus."City" as ciudad_cliente,
+  cus."Country" as pais_cliente,
+  cus."ContactName" as cliente
+from public.orders o
+left join public.employees emp on o."EmployeeID" = emp."EmployeeID"
+left join public.order_details od on od."OrderID" = o."OrderID"
+left join public.products pr on od."ProductID" = pr."ProductID"
+left join public.categories cat on cat."CategoryID" = pr."CategoryID"
+left join public.suppliers sup on sup."SupplierID" = pr."SupplierID"
+left join public.customers cus on cus."CustomerID" = o."CustomerID"
+
+-- VENTAS TIEMPOS =========================================================================================================================
+--cliente,fecha_venta,fecha_venta_anterior,diferencia_dias,diferencia_meses,monto_venta
+
+select
+  o."OrderID",
+  cus."ContactName" as cliente,
+  o."OrderDate" as fecha_venta,
+  oa."OrderDate" as fecha_venta_anterior,
+  EXTRACT(DAY FROM AGE(o."OrderDate", oa."OrderDate"))as diferencia_dias,
+  (EXTRACT(YEAR FROM AGE(o."OrderDate", oa."OrderDate")) * 12) + (EXTRACT(MONTH FROM AGE(o."OrderDate", oa."OrderDate"))) AS diferencia_meses,
+  SUM(((od."UnitPrice" - (od."Discount" * od."UnitPrice")) * od."Quantity")::numeric(16,2)) as monto_venta
+from public.orders o
+left join public.customers cus on o."CustomerID" = cus."CustomerID"
+left join public.order_details od on od."OrderID" = o."OrderID"
+left join public.products pr on od."ProductID" = pr."ProductID"
+left join lateral(
+  select 
+    * 
+  from public.orders
+  where "CustomerID" = o."CustomerID"
+  and "OrderDate" < o."OrderDate"
+  order by "OrderDate" desc
+  limit 1
+) oa on true
+group by o."OrderID", cus."ContactName", o."OrderDate", oa."OrderDate"
+
